@@ -118,16 +118,11 @@ impute(object = obj.snmf, input.file="genotype_chr7_imputation.lfmm", K = 4, run
 # results of imputation test 
 data_imputed <- read.lfmm("genotype_chr7_imputation.lfmm_imputed.lfmm")
 data_imputed <- as.data.frame(t(data_imputed)) ##COL=Individuals and  ROW==SNPs
-colnames(data_imputed)<-colnames(data_raw[:ncol(data_raw)]) 
+colnames(data_imputed)<-colnames(data_raw) 
 
 
 ```
-
-
  We now have data imputed on the NA data we created ourselves. Let's see the result
-
-
-
 
 ```{r save , add metadata}
 ##change data_raw to match with the format  
@@ -137,30 +132,28 @@ colnames(data_imputed)<-colnames(data_raw[:ncol(data_raw)])
 # data_raw_save<-data_raw
 
 #add metadata for each dataset 
-data_raw<-as.data.frame(cbind(data_ref, data_raw_save))
-data_imputed<-as.data.frame(cbind(data_ref, data_imputed_save))
+data_raw<-as.data.frame(cbind(data_ref, data_raw))
+data_imputed<-as.data.frame(cbind(data_ref, data_imputed))
 
 ```
 
 
 ```{r }
-# 
-inputFile<- "./output_before_imputation_chr7.txt"
+getwd()
+inputFile<- "C:/Users/2021lg003/Documents/Pearl millet panel PMIGAP/R_PMIGAP/test_imputation/output_before_imputation_chr7.txt"
 data_save <- file(inputFile, open = "r")
 
-#data_save<-read.table("data_save.txt")
-#colnames(data_save)<-c("#CHROM","POS","row_nb","col_nb", "IP")
+colnames(data_save)<-c("#CHROM","POS","row_nb","col_nb", "IP")
 
 i<-1
 while (length(oneLine <- readLines(data_save, n = 1, warn = FALSE)) > 0) {
 
    oneLine<-unlist(strsplit(oneLine, split=" "))
-    row_nb<-oneLine[3]
-    col_nb<-oneLine[4]
-    col_nb<-as.integer(col_nb)
-    row_nb<-as.integer(row_nb)
+    row_nb<-as.integer(oneLine[3])
+    col_nb<-as.integer(oneLine[4])
+
   oneLine
-  save_count<-data_raw[[row_nb,col_nb]]== data_imputed[[row_nb,col_nb]]
+  save_count<-data_raw[[row_nb,col_nb]]== data_imputed[[row_nb,col_nb]] ## does data raw and data_imputed have the same value ? 
   write.table(save_count, file = "count_chr7_raw_imputed.txt", col.names = F, append = TRUE)
   i<-i+1
   print(i)
@@ -170,6 +163,5 @@ count_df<-read.table("count_chr7_raw_imputed.txt")
 count_df<-as.character(count_df$V2)
 percent<-length(which(count_df == "TRUE"))/(length(which(count_df == "FALSE"))+length(which(count_df == "TRUE")))
   
-
 ```
 
