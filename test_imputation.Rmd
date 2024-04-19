@@ -1,0 +1,170 @@
+---
+title: "test_imputation"
+output: pdf_notebook
+---
+## Objective: 
+imputation on missing data and test of imputation quality
+## Method: 
+- In a starting dataset, we select SNPs (according to their row and column number) whose data is known and different from NA.
+- The data is deliberately "hidden": it is saved in another dataframe and replaced by NA. 
+- This is repeated N times. 
+- On these data transformed into NA, we impute the missing data with the sNMF package. 
+- We then compare the result between the data saved before imputation and the imputed data. Is the result the same? 
+- Repeat the test 1000 times, and calculate the percentage error. Out of 1000 tests, we had ...% where the imputed data was different from the expected data = error
+
+```{r libraries }
+library(data.table)
+library(LEA)
+library(dplyr)
+
+setwd(dir = "C:/Users/2021lg003/Documents/Pearl millet panel PMIGAP/R_PMIGAP/test_imputation")
+```
+## Dataset used
+- data_raw (unmodified data), 
+- data_WK (we'll remplace the 0 or 1 values by NA, retaining the row and col positions)
+- data_imputed: we use the data_WK file (with NA), change the file to an LFMM format, then impute the data with snmf
+```{r  dataset}
+genotype<-"C:/Users/2021lg003/Documents/Pearl millet panel PMIGAP/Dataset/dataset_chr_association_binaireVCF/chr7_association.txt"
+data_raw<-fread(genotype, header=TRUE)
+## raw data with NA containing 0, 1 and ., COL = #CHROM/POS/206 individuals, ROW = SNP Position 
+
+#save metadata in different df
+data_ref<-data_raw[,1:2]
+
+##raw df with NA (without metadata)
+data_raw<-data_raw[,-c(1:2)]
+data_raw <- data_raw[,lapply(.SD,as.numeric)]#, by=c("#CHROM","POS", "REF")]  ## all numeric except chrom & pos 
+
+
+## working df 
+data_WK<-fread(genotype, header=TRUE)
+data_WK <- data_WK[,lapply(.SD,as.numeric)]#, by=c("#CHROM","POS", "REF")]  ## all numeric except chrom & pos 
+data_WK_save<-data_WK
+
+#output data 
+output <- "./output_before_imputation_chr7.txt"
+data_save<-as.data.frame(t(c("#CHROM","POS","row_nb","col_nb", "IP")))
+colnames(data_save)<-data_save[1,]
+data_save<-data_save[-c(1),]
+
+
+```
+
+
+```{r boucle remplace donnees par NA}
+# loop of 1000 inferences 
+l <- 0  #count nb inferences
+
+#a first random position to start the loop 
+row_nb<-sample(nrow(data_WK), 1)
+col_nb<-sample(ncol(data_WK[3:ncol(data_WK)]), size = 1)
+
+while (l<1000) { 
+  
+## take a known value 0 or 1 at random from data_WK, different from NA, by selecting its row and col
+# select row
+row_nb<-as.vector(row_nb)
+row_WK<-data_WK[row_nb,]  
+
+##select col
+col_nb<-as.vector(col_nb)
+row_WK[[col_nb]] 
+
+
+data_test<-as.data.frame(c(row_WK[,1:2], row_nb, col_nb, row_WK[[col_nb]]), col.names = c("#CHROM","POS","row_nb","col_nb", "IP"))
+
+  if (is.na(data_test$IP) == FALSE) { # If value ==! NA, save the value in a new dataset data_save
+    data_save<-write.table(c(row_WK[,1:2], row_nb, col_nb, row_WK[[col_nb]]), file = output, row.names = F, col.names = F, append = TRUE) 
+  data_WK[[row_nb,col_nb]]<-NA ##now that the "real" data is save, replace it by NA 
+l<-l+1
+  } 
+
+row_nb<-sample(nrow(data_WK), 1)
+col_nb<-sample(ncol(data_WK), size = 1)
+
+print(l)
+}
+```
+
+
+```{r lfmm and imputation}
+#imput on these data_WK data 
+# same method as  : Cubry, P., Pidon, H., Ta, K.N., Tranchant-Dubreuil, C., Thuillet, A.-C., Holzinger, M., Adam, H., Kam, H., Chrestin, H., Ghesquiere, A., Francois, O., Sabot, F., Vigouroux, Y., Albar, L., Jouannic, S., 2020. Genome Wide Association Study Pinpoints Key Agronomic QTLs in African RiceOryza glaberrima. Rice 13, 66. https://doi.org/10.1186/s12284-020-00424-1
+
+genotype <- data_WK[,2:ncol(data_WK)]
+genotype <- t(genotype)
+write.lfmm(R = genotype,output.file = "genotype_chr7_imputation.lfmm")
+
+# source sNMF: http://membres-timc.imag.fr/Olivier.Francois/snmf/index.htm
+# https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3982712/
+  # NOTE : snmf estimates admixture coefficients using sparse Non-Negative Matrix Factorization algorithms, and provide STRUCTURE-like outputs.  https://www.rdocumentation.org/packages/LEA/versions/1.4.0/topics/snmf
+
+
+
+# create sNMF object with 10 reps per K possible value
+# obj.snmf = snmf(input.file="genotype_chr7_imputation.lfmm", K=1:10, entropy=T, ploidy = 1, project="new", rep=10)
+obj.snmf = snmf(input.file="genotype_chr7_imputation.lfmm", K=4, entropy=T, ploidy = 1, project="new", rep=10)
+
+
+## what is the best choice for K value, based on the plot of cross-entropy ?
+plot(obj.snmf) #  Choose K=4 in the next analysis
+
+## what is the best run (from 1:10) with K value selected? where there is the minimal cross entropy
+best = which.min(cross.entropy(obj.snmf, K = 4))
+
+impute(object = obj.snmf, input.file="genotype_chr7_imputation.lfmm", K = 4, run = best)
+
+# results of imputation test 
+data_imputed <- read.lfmm("genotype_chr7_imputation.lfmm_imputed.lfmm")
+data_imputed <- as.data.frame(t(data_imputed)) ##COL=Individuals et ROW==SNPs
+colnames(data_imputed)<-colnames(data_raw[:ncol(data_raw)]) ###
+```
+
+
+
+
+
+
+```{r save , add metadata}
+##change data_raw to match with the format  
+# #data_raw_save <- data_raw[,lapply(.SD,as.numeric)]
+# data_WK_save<-data_WK
+# data_imputed_save<-data_imputed
+# data_raw_save<-data_raw
+
+#add metadata for each dataset 
+data_raw<-as.data.frame(cbind(data_ref, data_raw_save))
+data_imputed<-as.data.frame(cbind(data_ref, data_imputed_save))
+
+```
+
+
+```{r }
+inputFile<- "./output_before_imputation_chr7.txt"
+data_save <- file(inputFile, open = "r")
+
+#data_save<-read.table("data_save.txt")
+#colnames(data_save)<-c("#CHROM","POS","row_nb","col_nb", "IP")
+
+i<-1
+while (length(oneLine <- readLines(data_save, n = 1, warn = FALSE)) > 0) {
+
+   oneLine<-unlist(strsplit(oneLine, split=" "))
+    row_nb<-oneLine[3]
+    col_nb<-oneLine[4]
+    col_nb<-as.integer(col_nb)
+    row_nb<-as.integer(row_nb)
+  oneLine
+  save_count<-data_raw[[row_nb,col_nb]]== data_imputed[[row_nb,col_nb]]
+  write.table(save_count, file = "count_chr7_raw_imputed.txt", col.names = F, append = TRUE)
+  i<-i+1
+  print(i)
+}
+##percentage of error 
+count_df<-read.table("count_chr7_raw_imputed.txt")
+count_df<-as.character(count_df$V2)
+percent<-length(which(count_df == "TRUE"))/(length(which(count_df == "FALSE"))+length(which(count_df == "TRUE")))
+  
+
+```
+
