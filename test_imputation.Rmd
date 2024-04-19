@@ -25,21 +25,19 @@ setwd(dir = "C:/Users/2021lg003/Documents/Pearl millet panel PMIGAP/R_PMIGAP/tes
 - data_imputed: we use the data_WK file (with NA), change the file to an LFMM format, then impute the data with snmf
 ```{r  dataset}
 genotype<-"C:/Users/2021lg003/Documents/Pearl millet panel PMIGAP/Dataset/dataset_chr_association_binaireVCF/chr7_association.txt"
-data_raw<-fread(genotype, header=TRUE)
-## raw data with NA containing 0, 1 and ., COL = #CHROM/POS/206 individuals, ROW = SNP Position 
+data_raw<-fread(genotype, header=TRUE) # raw data with NA containing 0, 1 and ., COL = #CHROM/POS/206 individuals, ROW = SNP Position 
 
 #save metadata in different df
 data_ref<-data_raw[,1:2]
 
 ##raw df with NA (without metadata)
 data_raw<-data_raw[,-c(1:2)]
-data_raw <- data_raw[,lapply(.SD,as.numeric)]#, by=c("#CHROM","POS", "REF")]  ## all numeric except chrom & pos 
+data_raw <- data_raw[,lapply(.SD,as.numeric)]
 
 
 ## working df 
 data_WK<-fread(genotype, header=TRUE)
-data_WK <- data_WK[,lapply(.SD,as.numeric)]#, by=c("#CHROM","POS", "REF")]  ## all numeric except chrom & pos 
-data_WK_save<-data_WK
+data_WK <- data_WK[,lapply(.SD,as.numeric)]
 
 #output data 
 output <- "./output_before_imputation_chr7.txt"
@@ -51,7 +49,7 @@ data_save<-data_save[-c(1),]
 ```
 
 
-```{r boucle remplace donnees par NA}
+```{r replace values by NA }
 # loop of 1000 inferences 
 l <- 0  #count nb inferences
 
@@ -71,9 +69,9 @@ col_nb<-as.vector(col_nb)
 row_WK[[col_nb]] 
 
 
-data_test<-as.data.frame(c(row_WK[,1:2], row_nb, col_nb, row_WK[[col_nb]]), col.names = c("#CHROM","POS","row_nb","col_nb", "IP"))
+data_test<-as.data.frame(c(row_WK[,1:2], row_nb, col_nb, row_WK[[col_nb]]), col.names = c("#CHROM","POS","row_nb","col_nb", "IP")) ##data_test = pick 1 SNP and save metadata, col, row and value
 
-  if (is.na(data_test$IP) == FALSE) { # If value ==! NA, save the value in a new dataset data_save
+  if (is.na(data_test$IP) == FALSE) { # If value =! NA, we keep it. Save the value in a new dataset data_save
     data_save<-write.table(c(row_WK[,1:2], row_nb, col_nb, row_WK[[col_nb]]), file = output, row.names = F, col.names = F, append = TRUE) 
   data_WK[[row_nb,col_nb]]<-NA ##now that the "real" data is save, replace it by NA 
 l<-l+1
@@ -84,6 +82,9 @@ col_nb<-sample(ncol(data_WK), size = 1)
 
 print(l)
 }
+
+# output contains N SNPs with value and metadata saved
+# data_WK has now NA value instead of known values
 ```
 
 
@@ -116,11 +117,14 @@ impute(object = obj.snmf, input.file="genotype_chr7_imputation.lfmm", K = 4, run
 
 # results of imputation test 
 data_imputed <- read.lfmm("genotype_chr7_imputation.lfmm_imputed.lfmm")
-data_imputed <- as.data.frame(t(data_imputed)) ##COL=Individuals et ROW==SNPs
-colnames(data_imputed)<-colnames(data_raw[:ncol(data_raw)]) ###
+data_imputed <- as.data.frame(t(data_imputed)) ##COL=Individuals and  ROW==SNPs
+colnames(data_imputed)<-colnames(data_raw[:ncol(data_raw)]) 
+
+
 ```
 
 
+ We now have data imputed on the NA data we created ourselves. Let's see the result
 
 
 
@@ -140,6 +144,7 @@ data_imputed<-as.data.frame(cbind(data_ref, data_imputed_save))
 
 
 ```{r }
+# 
 inputFile<- "./output_before_imputation_chr7.txt"
 data_save <- file(inputFile, open = "r")
 
